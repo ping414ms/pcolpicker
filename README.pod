@@ -1,0 +1,125 @@
+# =====================================================================
+# pcolpicker - PricolorPicker
+# 
+# ---
+# Developed by:
+# 	T.Onodera <onodera.takahiro@adways.net>
+# Version:
+# 	1.0.0
+# Cf.:
+# 	http://aidiary.hatenablog.com/entry/20091003/1254574041
+# 
+# 	(C)ADWAYS Inc. all rights reserved.
+# 
+# =====================================================================
+
+=head1 NAME
+    pcolpicker - 画像の主たる色をピックアップするプログラム
+
+=head1 SYNOPSIS
+
+    ./pcolpicker [-p] [-x|-s] [-c F_CHROMA] [-n S_CHROMA] IMAGEFILE
+        -p          ... Simply, most used color picking
+        -s          ... Output CSS format
+        -x          ... Output with hexadecimals
+        -c F_CHROMA ... 0<n<1.0. First pickup threshold(Def 0.5)
+        -n S_CHROMA ... 0<n<1.0. Second pickup threshold(Def 0.2)
+        IMAGEFILE   ... Image file
+
+=head1 DESCRIPTION
+
+本プログラムは、画像ファイルの色を分析して、主たるカラーを取得する。
+主たる色とは、もっとも彩度の高い色のこと。
+（※彩度とは、色要素における chroma (または satuation=飽和度) のこと）
+
+プログラムは、まず、彩度0.5以上の色で最も使われている色を求める。
+（C<-c> オプションで変更可能）
+その彩度以上の色が求められなかった場合は、今度は0.2以上の彩度のものを
+求める。（これも C<-n> オプションで変更可能）
+それでも求められなかった場合は、もっとも彩度に関係なく最頻色を求める。
+
+=head1 COLOR OPTIMIZATION
+
+色を簡便に分析するために、プログラムは、画像を4096の総天然色カラー
+（(C)富士通）に減色して処理する。
+出力される色も、4096色パレット内の色である。
+
+=head1 OUTPUT
+
+デフォルトでは、R,G,B の順で
+
+    0 8 4
+
+のように、空白で区切られた値を出力する。
+C<-x>オプションで、これを16進数化することができる。
+
+    a d 5
+
+また、C<-s>オプションで、CSS形式の3桁16進数にすることができる。
+
+	#893
+
+=head1 OpenCV
+
+OpenCV を使っている。システムに別途インストール必要があり。
+(配置場所として /usr/local/ 以下推奨）
+
+CentOSの場合、このWebページのインストール方法が、もっとも確実な感じがする。
+（yumでインストールできるOpenCVは、十分なファイルがありませんので使えない。）
+
+L<http://superuser.com/questions/678568/install-opencv-in-centos/725799#725799>
+
+以下、手順を抜粋した。
+
+=over
+
+=item 1. install all the required packages using yum
+
+    yum groupinstall "Development Tools" 
+    yum install gcc 
+    yum install cmake 
+    yum install git
+    yum install gtk2-devel
+    yum install pkgconfig 
+    yum install numpy 
+    yum install ffmpeg
+
+=item 2. Create working directory and check out the source code
+
+    mkdir /opt/working
+    cd /opt/working
+    git clone https://github.com/Itseez/opencv.git
+    cd opencv
+    git checkout tags/2.4.8.2
+
+=item 3. Create the Makefile
+
+    mkdir release
+    cd release
+    cmake -D CMAKE_BUILD_TYPE=RELEASE -D CMAKE_INSTALL_PREFIX=/usr/local ..
+
+=item 4. (note)
+If using cmake version 2.6-patch 4 (check with cmake --version), then you'll need to comment out a line in the build. Comment out string(MD5 hash "${lines}") on line 50 in /opt/working/opencv/cmake/cl2cpp.cmake. Other options (including updating cmake) can be found at here.
+
+=item 5. Build and install
+
+    cd /opt/working/opencv/release
+    make
+    make install
+
+=back
+
+=head1 VERSION and HISTORY
+
+Ver. 1.0.0 2014/12/11 First Release
+
+=head1 AUTHOR
+
+T.Onodera, C<< <onodera.takahiro at adways.net> >>
+
+=head1 LICENSE AND COPYRIGHT
+
+(C)ADWAYS Inc. All Rights Reserved.
+
+
+=cut
