@@ -45,9 +45,27 @@
 =head1 INSTALL
 
 =head2 Requirement
+
 Linux環境を想定。C<gcc> にてコンパイル。
 また、OpenCVが必須。CentOSの場合、後述を参考にインストールのこと。
 （OpenCVのインストールのために、C<cmake> も必要になると思う）
+
+=head2 System Environment
+
+もしOpenCVを C</usr/local/> 下に設置した場合は、1. C</etc/ld.so.conf.d/>下に
+ライブラリのパス（C</usr/local/lib>）を記述したファイルを設置した後、
+C<ldconfig>などを実行する。（システムからの設定）2. または、実行時に
+C<LD_LIBRARY_PATH>にC</usr/local/lib>を指定する、といった方法で
+C</usr/local/lib>までライブラリのパスを通すこと。
+
+=head2 How to make
+
+インストールディレクトリに移動し、C<make>を実行する。
+
+    cd pcolpicker
+    make
+
+実行プログラム C<pcolpicker> ができるので、これを任意の場所に設置する。
 
 =head1 COLOR OPTIMIZATION
 
@@ -110,6 +128,7 @@ L<http://superuser.com/questions/678568/install-opencv-in-centos/725799#725799>
     cmake -D CMAKE_BUILD_TYPE=RELEASE -D CMAKE_INSTALL_PREFIX=/usr/local ..
 
 =item 4. (note)
+
 If using cmake version 2.6-patch 4 (check with cmake --version), then you'll need to comment out a line in the build. Comment out string(MD5 hash "${lines}") on line 50 in /opt/working/opencv/cmake/cl2cpp.cmake. Other options (including updating cmake) can be found at here.
 
 =item 5. Build and install
