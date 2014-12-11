@@ -32,32 +32,36 @@
 
 =head1 DESCRIPTION
 
-    This program picks up primary color of image file.
-    In this program, primary color is defined as a chromatich color
-    in image.
+This program picks up primary color of image file.
+In this program, primary color is defined as a chromatich color
+in image.
 
-    The process will go with several steps.
-    First, PricolorPicker will try to find a most used color that
-    chromatic value is more than 0.5.
-    If it can't find it, program will try to find one more than 0.2.
-    If it can't still, program will output most used color.
+The pcolpicker will proceed with several steps.
+First, PricolorPicker will try to find a most used color that
+chromatic value is more than 0.5 (can change by option, C<-c>).
+If it can't find it, then, program will try to find one more
+than 0.2.(also can change by option, C<-n>).
+If it can't still, program will output a value of most used color.
 
 =head1 INSTALL
 
 =head2 Requirement
 
 Linux and C<gcc> are needed.
-And it need OpenCV2. If you use CentOS, see OpenCV section for installing.
-(note that to install OpenCV, it is also necessary to install cmake)
+And it need OpenCV2. If you use CentOS, see OpenCV section below for
+installing. (Note that to install OpenCV, it is maybe also necessary
+to install cmake)
 
 =head2 System Environment
 
-Program requires a search path, C</usr/local/lib>.
-So you should setup system environment or your current one.
-For system one, make file which was written '/usr/local/lib' under the
-directory, </etc/ld.so.conf.d/>, and execute C<ldconfig>.
-For personal one, set C<LD_LIBRARY_PATH>, one of environment variable, 
-before executing program.
+Program requires a library search path, C</usr/local/lib>.
+So you should configure system environment or your current one for this
+to find it.
+The way to config system ones is to make a file which was written
+'/usr/local/lib' under the directory, </etc/ld.so.conf.d/>, and execute
+C<ldconfig>.
+Personal one, set C<LD_LIBRARY_PATH> environment variable before 
+executing program.
 
 =head2 How to make
 
@@ -71,8 +75,8 @@ your favorite place.
 
 =head1 COLOR OPTIMIZATION
 
-For easy analization, this program reduce colors of image first to 4096
-palletes.
+For easy analization, this program reduces colors of image to 4096
+palletes first.
 
 =head1 OUTPUT
 
