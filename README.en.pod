@@ -1,0 +1,161 @@
+# =====================================================================
+# pcolpicker - PricolorPicker
+# 
+# ---
+# Developed by:
+# 	T.Onodera <onodera.takahiro@adways.net>
+# Version:
+# 	1.0.0
+# Cf.:
+# 	http://aidiary.hatenablog.com/entry/20091003/1254574041
+# 
+# 	(C)ADWAYS Inc. all rights reserved.
+# 
+# =====================================================================
+
+=encoding UTF-8
+
+
+=head1 NAME
+
+    pcolpicker - get primary color from image file.
+
+=head1 SYNOPSIS
+
+    ./pcolpicker [-p] [-x|-s] [-c F_CHROMA] [-n S_CHROMA] IMAGEFILE
+        -p          ... Simply, most used color picking
+        -s          ... Output CSS format
+        -x          ... Output with hexadecimals
+        -c F_CHROMA ... 0<n<1.0. First pickup threshold(Def 0.5)
+        -n S_CHROMA ... 0<n<1.0. Second pickup threshold(Def 0.2)
+        IMAGEFILE   ... Image file
+
+=head1 DESCRIPTION
+
+    This program picks up primary color of image file.
+    In this program, primary color is defined as a chromatich color
+    in image.
+
+    The process will go with several steps.
+    First, PricolorPicker will try to find a most used color that
+    chromatic value is more than 0.5.
+    If it can't find it, program will try to find one more than 0.2.
+    If it can't still, program will output most used color.
+
+=head1 INSTALL
+
+=head2 Requirement
+
+Linux and C<gcc> are needed.
+And it need OpenCV2. If you use CentOS, see OpenCV section for installing.
+(note that to install OpenCV, it is also necessary to install cmake)
+
+=head2 System Environment
+
+Program requires a search path, C</usr/local/lib>.
+So you should setup system environment or your current one.
+For system one, make file which was written '/usr/local/lib' under the
+directory, </etc/ld.so.conf.d/>, and execute C<ldconfig>.
+For personal one, set C<LD_LIBRARY_PATH>, one of environment variable, 
+before executing program.
+
+=head2 How to make
+
+Change program directory which has sorce, and execute C<make>.
+
+    cd pcolpicker
+    make
+
+Executable program, C<pcolpicker>, will be made and copy or move it to
+your favorite place.
+
+=head1 COLOR OPTIMIZATION
+
+For easy analization, this program reduce colors of image first to 4096
+palletes.
+
+=head1 OUTPUT
+
+Default, this shows RGB values with white space separating like;
+
+    0 8 4
+
+C<-x> option changes these decimal to hexdecimal.
+
+    a d 5
+
+And more, C<-s> option changes these to CSS style hex value.
+
+    #893
+
+=head1 OpenCV
+
+This program uses OpenCV 2, so you neet to install it.
+(Prefix should be /usr/local)
+
+If you use CentOS as your host, an web page below will helps well.
+(Do not use OpenCV which is installed by C<yum> command.)
+
+L<http://superuser.com/questions/678568/install-opencv-in-centos/725799#725799>
+
+There is snipet of installing from that page.
+
+=over
+
+=item 1. install all the required packages using yum
+
+    yum groupinstall "Development Tools" 
+    yum install gcc 
+    yum install cmake 
+    yum install git
+    yum install gtk2-devel
+    yum install pkgconfig 
+    yum install numpy 
+    yum install ffmpeg
+
+=item 2. Create working directory and check out the source code
+
+    mkdir /opt/working
+    cd /opt/working
+    git clone https://github.com/Itseez/opencv.git
+    cd opencv
+    git checkout tags/2.4.8.2
+
+=item 3. Create the Makefile
+
+    mkdir release
+    cd release
+    cmake -D CMAKE_BUILD_TYPE=RELEASE -D CMAKE_INSTALL_PREFIX=/usr/local ..
+
+=item 4. (note)
+
+If using cmake version 2.6-patch 4 (check with cmake --version), then you'll need to comment out a line in the build. Comment out string(MD5 hash "${lines}") on line 50 in /opt/working/opencv/cmake/cl2cpp.cmake. Other options (including updating cmake) can be found at here.
+
+=item 5. Build and install
+
+    cd /opt/working/opencv/release
+    make
+    make install
+
+=back
+
+=head1 BUG and REQUEST, etc.
+
+Tell or ask me, Onodera. 
+Program is written by c++, but almost part is C style coding...
+It will be pleasure for me that you will improve, correct bug and custormize this!
+
+=head1 VERSION and HISTORY
+
+Ver. 1.0.0 2014/12/11 First Release
+
+=head1 AUTHOR
+
+T.Onodera, C<< <onodera.takahiro at adways.net> >>
+
+=head1 LICENSE AND COPYRIGHT
+
+(C)ADWAYS Inc. All Rights Reserved.
+
+
+=cut
