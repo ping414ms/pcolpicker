@@ -13,7 +13,11 @@
 # 
 # =====================================================================
 
+=encoding UTF-8
+
+
 =head1 NAME
+
     pcolpicker - 画像の主たる色をピックアップするプログラム
 
 =head1 SYNOPSIS
@@ -108,6 +112,12 @@ If using cmake version 2.6-patch 4 (check with cmake --version), then you'll nee
     make install
 
 =back
+
+=head1 BUG and REQUEST, etc.
+
+おのでらまで。
+c++ で書いてはありますが、ほとんど内容はCの拙いコードになっています。。。
+改変・改修・カスタマイズ歓迎します。
 
 =head1 VERSION and HISTORY
 
