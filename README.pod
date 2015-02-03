@@ -139,6 +139,14 @@ If using cmake version 2.6-patch 4 (check with cmake --version), then you'll nee
 
 =back
 
+=head1 SAMPLE PAGE
+
+    http://10.255.32.47/pricol/
+
+ADWAYS テスト環境内。
+Cornic HSV Model（円錐型HSV） と Colmnar HSV Model（円柱型HSVモデル）で、２パターンを用意。
+例からもわかるとおり、ものによっては、彩度0.6～0.7前後で取るのがいいかもしれない。
+
 =head1 BUG and REQUEST, etc.
 
 おのでらまで。
