@@ -4,20 +4,22 @@
 //    get primary color from image file.
 //
 //    This program picks up primary color of image file.
-//    In this program, primary color is defined as a chromatich color
-//    in image.
+//    Target image is a nail photo, so this discards skin color.
 //
-//    The process will go with several steps.
-//    First, PricolorPicker will try to find a most used color that
-//    chromatic value is more than 0.5.
-//    If it can't find it, program will try to find one more than 0.2.
-//    If it can't still, program will output most used color.
+//    [Logic]
+//      1. The program loads an images from file or STDIN.
+//      2. Clip image (reason that almost objects (fingers or nails)
+//         are fourcused in center of image).
+//      3. Resize image bit smaller for using less memory.
+//      4. Make image posterization.
+//      5. Convert it from RGB to HSV.
+//      6. Make histgram with high satuation.
 //
 //    ---
 //    Developed by:
 //        T.Onodera <onodera.takahiro@adways.net>
 //    Version:
-//        1.0.0
+//        2.0.0
 //    Cf.:
 //        http://aidiary.hatenablog.com/entry/20091003/1254574041
 //
@@ -30,134 +32,125 @@
 #include <getopt.h>
 #include <fcntl.h>
 #include <unistd.h> 
+#include <vector> 
 #include <sys/types.h>
 #include <sys/stat.h>
-#include "opencv/cv.h"
-#include "opencv/highgui.h"
+#include <opencv2/core/core.hpp>
+#include <opencv2/imgproc/types_c.h>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/gpu/gpu.hpp>
 
-#define MAX3(a, b, c) ((a) > (MAX(b, c)) ? (a) : (MAX(b, c)))
-#define MIN3(a, b, c) ((a) < (MIN(b, c)) ? (a) : (MIN(b, c)))
 
-// HSV Model, CONIC / COLUMNAR
-#define USE_CONIC_MODEL 1
+#define DEBUG	0
 
+// STDIN uging without filename
+#define USE_STDIN 1
+#define READ_BUFFER_SIZE     2048
 // Filesize limitation
 #define MAX_FILESIZE    ((unsigned long)1000000000)
 
-// Color depth(MAX 8); 2^COLDEPTH, 2^4->16, 16^3->4096
-#define COLDEPTH        4
-#define NUM_OF_BIN      (1 << (COLDEPTH * 3))
+// Default values
+#define DEF_HBINS	2
+#define DEF_SBINS	4
+#define DEF_HRANGE0  15
+#define DEF_HRANGE1  180
+#define DEF_SLEVEL0  128
+#define DEF_CLIPRATIO  0.1
 
-// Default Chrome border line
-#define DEF_UCHROME     0.5
-#define DEF_LCHROME     0.2
+#define DEF_RESIZE_WIDTH  200
+#define DEF_RESIZE_HEIGHT 200
+
+#define DEF_NORMALIZE_KERNELSIZE 0
+#define DEF_BITREDUCE_POSTERIZE  2
 
 
 using namespace std;
+using namespace cv;
 
 
-int calcHistogram(char *, int *, float *);
-int rgb2bin(int, int, int);
-void bin2rgb(int, int *);
-float calc_chrome(int, int, int);
+void execAnalyse(Mat &, Mat &, Mat &, int, int, int *, int *, int);
 long get_filesize(const char *);
 static void help(char *);
 
 
 /**
- * Calculate histgram of image
- *
- * @param[in]  filename   image file
- * @param[out] histogram  histgram data
- * @return ok ... 0, fault ... -1
+ * Calculate and analyse color of image
  */
-int calcHistogram(char *filename, int histogram[NUM_OF_BIN], float chromes[NUM_OF_BIN] )
+void execAnalyse(Mat& image, Mat& ret, Mat& rhsv, int hbins, int sbins, int* hranges, int* sranges, int peakonly )
 {
-	// load image
-	IplImage *img = cvLoadImage(filename, CV_LOAD_IMAGE_COLOR);
+	// bin counter
+	int elemsize[] = { 180>>hbins, 256>>sbins, 256>>sbins };
+	SparseMat counter(3, elemsize, CV_16UC1);	// max 65536 count
 
-	if (img == NULL) {
-		cerr << "Cannot open image file: " << filename << endl;
-		return -1;
-	}
+	// Convert image to HSV data.
+	// H {0...180}, S {0..255}, V{0..255}
+	Mat hsv;
+	cvtColor( image, hsv, CV_BGR2HSV );
 
-	for (int y = 0; y < img->height; y++)
-	{
-		uchar *pin = (uchar *)(img->imageData + y * img->widthStep);
-		for (int x = 0; x < img->width; x++)
-		{
-			int b = pin[ x*3 +0 ];
-			int g = pin[ x*3 +1 ];
-			int r = pin[ x*3 +2 ];
+	// pixel counting
+	int hrange0 = hranges[0];
+	int hrange1 = hranges[1];
+	int srange0 = sranges[0];
+	int srange1 = sranges[1];
 
-			int bin = rgb2bin( r, g, b );
+	for ( int y = 0; y < hsv.rows; y++ ){
+		for ( int x = 0; x < hsv.cols; x++ ){
+			Vec3b vec = hsv.at<Vec3b>(y,x);
 
-			// note: If want color tone adjusting,
-			// changing addition value of histgram (should be float)
-			// wiil be effective...maybe. 
-			histogram[ bin ] += 1;
-			if ( !chromes[bin] ) chromes[bin] = calc_chrome( r, g, b );
+			int hue = vec[0];
+			int sat = vec[1];
+			int val = vec[2];
+
+			// skip when color is out of range
+			if ( !peakonly && (hue < hrange0 || hue > hrange1) ) continue;
+			if ( !peakonly && (sat < srange0 || sat > srange1) ) continue;
+
+			hue = (hue>>hbins)<<hbins;
+			sat = (sat>>sbins)<<sbins;
+			val = (val>>sbins)<<sbins;
+
+			if ( !peakonly && sat == 0 ) continue;     // ignore black
+
+			counter.ref<int>(hue, sat, val)++;
 		}
 	}
 
-	cvReleaseImage(&img);
-	return 0;
+	// --- find most used color ---
+	SparseMatIterator it     = counter.begin(),
+	                  it_end = counter.end();
+	Vec3b maxidx(0,0,0);
+	int   maxcnt = 0;
+	for (; it != it_end; ++it ){
+		const SparseMat::Node* n = it.node();
+		int count = it.value<int>();
+//		cout << "cnt: " << it.value<int>() << endl;
+
+		if ( count > maxcnt ){
+			int hue = n->idx[0];
+			int sat = n->idx[1];
+			int val = n->idx[2];
+#if DEBUG
+			cerr <<"hue:" << hue << ", sat:" << sat << ", val:" << val << "  -> cnt: " count <<endl;
+#endif
+			maxidx = Vec3b(hue, sat, val);
+			maxcnt = count;
+		}
+	}
+#if DEBUG
+	cerr << "MaxCnt: " << maxcnt << endl;
+	cerr << "MaxIdx: " << maxidx << endl;
+#endif
+
+	rhsv = Mat(1,1,CV_8UC3);
+	rhsv.at<Vec3b>(0,0) = maxidx;
+
+	cvtColor( rhsv, ret, CV_HSV2RGB );
 }
 
 
 /**
- * Get bin number from (r,g,b)
- *
- * @param[in]  (r,g,b)    RGB values
- * @return bin no.
+ * get byte num of file size
  */
-int rgb2bin(int r, int g, int b)
-{
-	int r0 = r >> (8-COLDEPTH);
-	int g0 = g >> (8-COLDEPTH);
-	int b0 = b >> (8-COLDEPTH);
-	return ( r0 << (COLDEPTH*2) ) + ( g0 << COLDEPTH ) + b0;
-}
-
-void bin2rgb(int bin, int rgb[3])
-{
-	int r,g,b;
-	int cmpl = (1<<COLDEPTH) -1;
-
-	b = bin & cmpl;
-	bin >>= COLDEPTH;
-	g = bin & cmpl;
-	bin >>= COLDEPTH;
-	r = bin & cmpl;
-
-	rgb[0] = r;
-	rgb[1] = g;
-	rgb[2] = b;
-}
-
-float calc_chrome(int r, int g, int b)
-{
-	int r0 = r >> (8-COLDEPTH);
-	int g0 = g >> (8-COLDEPTH);
-	int b0 = b >> (8-COLDEPTH);
-
-	float max = MAX3(r0, g0, b0);
-	float min = MIN3(r0, g0, b0);
-
-	if ( max <= 0 || max == min ) return 0.0;
-
-#if USE_CONIC_MODEL
-	// by conic model
-	int dev = (1<<COLDEPTH) -1;
-	return (max - min) / dev;
-#else
-	// by columnar model
-	return (max - min) / max;
-#endif
-}
-
-
-// ----------------------------------------------------------------------
 
 long get_filesize(const char *filename)
 {
@@ -175,17 +168,30 @@ long get_filesize(const char *filename)
 
 int main(int argc, char **argv)
 {
-	int   ret;
-	float crate   = DEF_UCHROME;
-	float crate2  = DEF_LCHROME;
-	int   peakonly= 0;
-	int   hexout  = 0;
-	int   sstout  = 0;
-	char  *imagefile;
+	int peakonly = 0;
+	int out_dec  = 0;
+	int out_css  = 0;
+	int out_hev  = 0;
+	int hbins    = DEF_HBINS;
+	int sbins    = DEF_SBINS;
+	int hrange0  = DEF_HRANGE0;
+	int hrange1  = DEF_HRANGE1;
+	int slevel0  = DEF_SLEVEL0;
+	int do_normal= DEF_NORMALIZE_KERNELSIZE;
+	int do_reduce= DEF_BITREDUCE_POSTERIZE;
+	float ratioclip = DEF_CLIPRATIO;
 
-	while( (ret = getopt(argc, argv, "hpxsc:n:")) != -1 )
+
+	Mat             image;
+	char            *imagefile;
+	vector<uchar>   imgbuff;	//buffer for coding
+	char            readbuf[READ_BUFFER_SIZE];
+
+
+	int arg;
+	while( ( arg = getopt(argc, argv, "hpdxvn:b:s:a:z:c:l:")) != -1 )
 	{
-		switch(ret){
+		switch(arg){
 			default:
 			case 'h':
 				help(argv[0]);
@@ -195,51 +201,126 @@ int main(int argc, char **argv)
 				cerr << "Unknown option." << endl;
 				return -1;
 
-			case 'c':
-				crate = (float)atof(optarg);
-				if ( !( crate > 0.0 && crate < 1.0 ) ){
-					cerr << "Chroma border parameter must be 0.0 < n < 1.0." << endl;
-					return -1;
-				}
-				break;
-
-			case 'u':
-				crate2 = (float)atof(optarg);
-				if ( !( crate2 > 0.0 && crate2 < 1.0 ) ){
-					cerr << "Chroma(2nd) border parameter must be 0.0 < n < 1.0." << endl;
-					return -1;
-				}
-				break;
-
 			case 'p':
 				peakonly = 1;
 				break;
 
-			case 'x':	// hex output
-				hexout = 1;
+			case 'd':	// decimal output
+				out_dec = 1;
 				break;
 
-			case 's':	// hex output
-				sstout = 1;
+			case 'x':	// hex output
+				out_css = 1;
+				break;
+
+			case 'v':	// hsv out
+				out_hev = 1;
+				break;
+
+			case 'b':
+				hbins = (int)atoi(optarg);
+				if ( hbins < 0 || hbins > 5 ){
+					cerr << "Param -b error" << endl;
+					return -1;
+				}
+				break;
+
+			case 's':
+				sbins = (int)atoi(optarg);
+				if ( sbins < 0 || sbins > 7 ){
+					cerr << "Param -s error" << endl;
+					return -1;
+				}
+				break;
+
+			case 'a':
+				hrange0 = (int)atoi(optarg);
+				if ( hrange0 < 0 || hrange0 > 180 ){
+					cerr << "Param -a error" << endl;
+					return -1;
+				}
+				break;
+
+			case 'z':
+				hrange1 = (int)atoi(optarg);
+				if ( hrange1 < 0 || hrange1 > 180 ){
+					cerr << "Param -z error" << endl;
+					return -1;
+				}
+				break;
+
+			case 'c':
+				slevel0 = (int)atoi(optarg);
+				if ( slevel0 < 0 || slevel0 > 255 ){
+					cerr << "Param -c error" << endl;
+					return -1;
+				}
+				break;
+
+			case 'l':
+				ratioclip = (float)atof(optarg);
+				if ( ratioclip < 0 || ratioclip > 0.9 ){
+					cerr << "Param -l error" << endl;
+					return -1;
+				}
+				break;
+
+			case 'n':	// Execute normarization with medianBlur
+				do_normal = (int)atoi(optarg);
+				if ( do_normal < 1 || do_normal > 9 || (do_normal%2 == 0) ){
+					cerr << "Param -n error" << endl;
+					return -1;
+				}
+				break;
+
+			case 'r':
+				do_reduce = (int)atoi(optarg);
+				if ( do_reduce < 0 || do_reduce > 6 ){
+					cerr << "Param -r error" << endl;
+					return -1;
+				}
 				break;
 		}
 	}
 
-//	if ( crate2 >= crate ){
-//		cerr << "Second chroma border param is bigger or equarl than furst one." << endl;
-//		return -1;
-//	}
-
-
+#if !USE_STDIN
 	if ( !(argc-1 == optind) ){
 		cerr << "No image file was specified.\n" << endl;
 		help(argv[0]);
 		return -1;
 	}
 	imagefile = argv[optind];
+#else
+	if ( !(argc-1 == optind) ){
+		imagefile = NULL;
+	} else {
+		imagefile = argv[optind];
+	}
+#endif
 
-	{
-		long fsize = get_filesize( imagefile );
+
+	// ----- load image -----
+	long size=0, fsize = 0;
+
+	if ( imagefile == NULL ){
+
+		// from STDIN
+		while ( (size = read(fileno(stdin), readbuf, READ_BUFFER_SIZE)) > 0 ){
+			imgbuff.reserve(size);
+			fsize += size;
+			if ( fsize > MAX_FILESIZE ){
+				cerr << "File size(" << fsize << ") over (MAX: " << MAX_FILESIZE << " byte)" << endl;
+				return -1;
+			}
+			for (int i=0; i<size; i++) imgbuff.push_back(readbuf[i]);
+		}
+		image = imdecode(Mat(imgbuff), CV_LOAD_IMAGE_COLOR);
+
+	} else {
+
+		// from strage
+		image = imread( imagefile, CV_LOAD_IMAGE_COLOR );
+		fsize = get_filesize( imagefile );
 		if ( fsize == -1 ){
 			cerr << "File Error" << endl;
 			return -1;
@@ -250,93 +331,66 @@ int main(int argc, char **argv)
 		}
 	}
 
-	// -- init ---
-	int histogram[ NUM_OF_BIN ];
-	float chromes[ NUM_OF_BIN ];
-
-	for ( int i=0; i<NUM_OF_BIN; i++ ){
-		histogram[i] = 0;
-		chromes[i]   = 0;
-	}
-
-	// -- exec to calc ---
-	ret = calcHistogram(imagefile, histogram, chromes);
-
-	if (ret < 0) {
-		cerr << "Histgram calculation failed." << endl;
+	if ( image.empty() ){
+		cerr << "Image data error" << endl;
 		return -1;
 	}
 
-	// -- Calculation ---
-	int peakbin = -1;
-	int peakval = 0;
 
-	int peakbin_c = -1;
-	int peakval_c = 0;
+	// ----- Modify image data to calculate -----
+	int w0,h0,cw,ch;
+	w0 = image.cols;
+	h0 = image.rows;
+	cw = (int)(w0 * ratioclip);
+	ch = (int)(h0 * ratioclip);
+	Rect rect = Rect(cw/2, ch/2, w0-cw, h0-ch );
+#if DEBUG
+	cerr << "Clipping: " << rect <<endl;
+#endif
 
-	int peakbin_c2 = -1;
-	int peakval_c2 = 0;
+	Mat modimg;
+	resize(
+		image( rect ),
+		modimg,
+		Size( DEF_RESIZE_WIDTH, DEF_RESIZE_HEIGHT ),
+		INTER_LINEAR
+	);
+	image = modimg;
 
-	for ( int i = 0; i<NUM_OF_BIN; i++ )
-	{
-		int h   = histogram[i];
-		float c = chromes[i];
-
-		// record most used color
-		// memo: using colmunar moder, make threshould parameter rather big.
-		// (ex. 0.6 or so)
-		// conic model, it is better to be smaller than it. (ex. 0.3 or so)
-		if ( h > peakval ){
-			peakbin = i;
-			peakval = h;
-		}
-
-		if ( peakonly ) continue;
-
-		// and one limitated by -c
-		if ( c >= crate ){
-			if ( h > peakval_c ){
-				peakbin_c = i;
-				peakval_c = h;
-			}
-		}
-
-		// and least chrome 0.2
-		if ( c >= crate2 ){
-			if ( h > peakval_c2 ){
-				peakbin_c2 = i;
-				peakval_c2 = h;
-			}
-		}
+	if ( do_normal ){
+		medianBlur(image, modimg, do_normal);
+		image = modimg;
 	}
 
-	// -- output result ---
-	int retbin = 0;
-	int retrgb[3];
+#if DEBUG
+    imwrite("/tmp/testout.png", image);
+#endif
 
-	if ( peakbin_c != -1 ){
-		retbin = peakbin_c;
-	} else {
-		if ( peakbin_c2 != -1 ){
-			retbin = peakbin_c2;
-		} else {
-			retbin = peakbin;
-		}
-	}
-	bin2rgb( retbin, retrgb);
+	// ----- Histgram Calculation -----
+	Mat ret  = Mat(1,1,CV_8UC3);
+	Mat rhsv = Mat(1,1,CV_8UC3);
+	int hranges[] = { hrange0, hrange1 };
+	int sranges[] = { slevel0, 255 };
+	execAnalyse( image, ret, rhsv, hbins, sbins, hranges, sranges, peakonly );
+#if DEBUG
+	cerr << "Returned RGB: " << ret <<endl;
+#endif
 
-	if ( sstout ){
-		// CSS format
-		if ( COLDEPTH > 4 ){
-			printf("#%02x%02x%02x", retrgb[0], retrgb[1], retrgb[2]);	// #a1b2c3
-		} else {
-			printf("#%x%x%x", retrgb[0], retrgb[1], retrgb[2]);	// #abc
-		}
+	if ( out_hev ){
+		Vec3b hsv = rhsv.at<Vec3b>(0,0);
+		printf("%d %d%% %d%%", hsv[0]*360/180, hsv[1]*100/256, hsv[2]*100/256);	// H S V
 	} else {
-		if ( hexout ){
-			printf("%x %x %x", retrgb[0], retrgb[1], retrgb[2]);
+		Vec3b rgb = ret.at<Vec3b>(0,0);
+
+		if ( out_css ){
+			// CSS format
+			printf("#%02x%02x%02x", rgb[0], rgb[1], rgb[2]);	// #a1b2c3
 		} else {
-			printf("%d %d %d", retrgb[0], retrgb[1], retrgb[2]);
+			if ( out_dec ){
+				printf("%d %d %d", rgb[0], rgb[1], rgb[2]);
+			} else {
+				printf("%02x%02x%02x", rgb[0], rgb[1], rgb[2]);	// #aabbcc
+			}
 		}
 	}
 }
@@ -345,13 +399,22 @@ int main(int argc, char **argv)
 static void help(char *path)
 {
 	printf("USAGE:\n"
-		"   %s [-p] [-x|-s] [-c F_CHROMA] [-n S_CHROMA] IMAGEFILE\n"
-		"\t-p          ... Simply, most used color picking\n"
-		"\t-s          ... Output CSS format\n"
-		"\t-x          ... Output with hexadecimals\n"
-		"\t-c F_CHROMA ... 0<n<1.0. First pickup threshold(Def 0.5)\n"
-		"\t-n S_CHROMA ... 0<n<1.0. Second pickup threshold(Def 0.2)\n"
-		"\tIMAGEFILE   ... Image file\n"
+		"   %s [-p] [-d|-x] [-b SIZE] [-c SIZE] [-a DEGREE] [-z DEGREE] [-c LEVEL] [IMAGEFILE]\n"
+		"\t-p          ... Most used color output picking without range limits\n"
+		"\t-v          ... HSV output\n"
+		"\t-d          ... Output with decimals\n"
+		"\t-x          ... Output with stylesheet format\n"
+		"\t-b SIZE     ... 0~5. Bit shift amount of Hue. (Default 2)\n"
+		"\t-s SIZE     ... 0~7. Bit shift amount of Saturation. (Default 4)\n"
+		"\t-a DEGREE   ... 0~180. Start degree of hue\n"
+		"\t-z DEGREE   ... 0~180. End degree of hue\n"
+		"\t-c LEVEL    ... 0~255. Bottom level of chrome\n"
+		"\t-l CLIP     ... 0~90(%). Ratio of cliping\n"
+		"\t-n:         ... 1,3,5,7 or 9. Normalization level. Omiting is non\n"
+		"\t-r:         ... 0~6. Bits to reduce. default is 2\n"
+		"\tIMAGEFILE   ... Image file. Omitting means from STDIN\n"
 		,path
 	);
 }
+
+
