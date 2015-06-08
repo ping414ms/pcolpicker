@@ -4,7 +4,7 @@ FILES=src/pcolpicker.cpp
 CC=g++
 CXXFLAGS=-I/usr/local/include
 LDFLAGS=-L/usr/local/lib
-LIBS=-lopencv_core -lopencv_highgui
+LIBS=-lopencv_core -lopencv_imgproc -lopencv_highgui
 
 .SUFFIXES: .cpp .o
 
