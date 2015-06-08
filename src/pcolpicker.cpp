@@ -28,6 +28,7 @@
 
 #include <cstdio>
 #include <iostream>
+#include <utility>
 #include <stdlib.h>
 #include <getopt.h>
 #include <fcntl.h>
@@ -41,7 +42,7 @@
 #include <opencv2/gpu/gpu.hpp>
 
 
-#define DEBUG	0
+#define DEBUG	1
 
 // STDIN uging without filename
 #define USE_STDIN 1
@@ -52,9 +53,9 @@
 // Default values
 #define DEF_HBINS	2
 #define DEF_SBINS	4
-#define DEF_HRANGE0  15
-#define DEF_HRANGE1  180
-#define DEF_SLEVEL0  128
+#define DEF_HRANGE0  -3		// -6'/360'
+#define DEF_HRANGE1  24		// 48'/360'	Covering pR,R,yR of PCCS
+#define DEF_SLEVEL1  200	// 78%/100%
 #define DEF_CLIPRATIO  0.1
 
 #define DEF_RESIZE_WIDTH  200
@@ -63,20 +64,22 @@
 #define DEF_NORMALIZE_KERNELSIZE 0
 #define DEF_BITREDUCE_POSTERIZE  2
 
+#define DEF_WHITING_RATIO 0.0	// output color with bit whiting
+
 
 using namespace std;
 using namespace cv;
 
 
-void execAnalyse(Mat &, Mat &, Mat &, int, int, int *, int *, int);
+void getPriColorHSV(Mat &, Mat &, Mat &, int, int, int *, int *, int);
 long get_filesize(const char *);
 static void help(char *);
 
 
 /**
- * Calculate and analyse color of image
+ * Calculate and analyse color of image and return it by HSV
  */
-void execAnalyse(Mat& image, Mat& ret, Mat& rhsv, int hbins, int sbins, int* hranges, int* sranges, int peakonly )
+void getPriColorHSV(Mat& image, Mat& rhsv, int hbins, int sbins, int* hranges, int* sranges, int peakonly)
 {
 	// bin counter
 	int elemsize[] = { 180>>hbins, 256>>sbins, 256>>sbins };
@@ -93,6 +96,7 @@ void execAnalyse(Mat& image, Mat& ret, Mat& rhsv, int hbins, int sbins, int* hra
 	int srange0 = sranges[0];
 	int srange1 = sranges[1];
 
+	int totalcount = 0;
 	for ( int y = 0; y < hsv.rows; y++ ){
 		for ( int x = 0; x < hsv.cols; x++ ){
 			Vec3b vec = hsv.at<Vec3b>(y,x);
@@ -101,50 +105,66 @@ void execAnalyse(Mat& image, Mat& ret, Mat& rhsv, int hbins, int sbins, int* hra
 			int sat = vec[1];
 			int val = vec[2];
 
-			// skip when color is out of range
-			if ( !peakonly && (hue < hrange0 || hue > hrange1) ) continue;
-			if ( !peakonly && (sat < srange0 || sat > srange1) ) continue;
+			if ( !peakonly ){
+				if ( sat == 0 ) continue;     // ignore black
+				// skip when color is out of range
+				if ( srange0 <= sat && sat <= srange1 ){
+					if ( hrange0 < 0 ){
+						if ( hrange0+180 <= hue && hue <= 180 || 0 <= hue && hue <= hrange1 ){
+							continue;
+						};
+					} else {
+						if ( hrange0 <= hue && hue <= hrange1 ){
+							continue;
+						}
+					}
+				}
+			}
 
 			hue = (hue>>hbins)<<hbins;
 			sat = (sat>>sbins)<<sbins;
 			val = (val>>sbins)<<sbins;
 
-			if ( !peakonly && sat == 0 ) continue;     // ignore black
-
 			counter.ref<int>(hue, sat, val)++;
+			totalcount++;
 		}
 	}
 
 	// --- find most used color ---
-	SparseMatIterator it     = counter.begin(),
-	                  it_end = counter.end();
-	Vec3b maxidx(0,0,0);
-	int   maxcnt = 0;
-	for (; it != it_end; ++it ){
-		const SparseMat::Node* n = it.node();
-		int count = it.value<int>();
-//		cout << "cnt: " << it.value<int>() << endl;
-
-		if ( count > maxcnt ){
-			int hue = n->idx[0];
-			int sat = n->idx[1];
-			int val = n->idx[2];
-#if DEBUG
-			cerr <<"hue:" << hue << ", sat:" << sat << ", val:" << val << "  -> cnt: " count <<endl;
-#endif
-			maxidx = Vec3b(hue, sat, val);
-			maxcnt = count;
-		}
-	}
-#if DEBUG
-	cerr << "MaxCnt: " << maxcnt << endl;
-	cerr << "MaxIdx: " << maxidx << endl;
-#endif
-
 	rhsv = Mat(1,1,CV_8UC3);
-	rhsv.at<Vec3b>(0,0) = maxidx;
 
-	cvtColor( rhsv, ret, CV_HSV2RGB );
+	if ( totalcount ){
+		SparseMatIterator it     = counter.begin(),
+		                  it_end = counter.end();
+		Vec3b maxidx(0,0,0);
+		int   maxcnt = 0;
+		for (; it != it_end; ++it ){
+			const SparseMat::Node* n = it.node();
+			int count = it.value<int>();
+	//		cout << "cnt: " << it.value<int>() << endl;
+
+			if ( count > maxcnt ){
+				int hue = n->idx[0];
+				int sat = n->idx[1];
+				int val = n->idx[2];
+#if DEBUG
+				cerr <<"hue:" << hue << ", sat:" << sat << ", val:" << val << "  -> cnt: " << count <<endl;
+#endif
+				maxidx = Vec3b(hue, sat, val);
+				maxcnt = count;
+			}
+		}
+#if DEBUG
+		cerr << "MaxCnt: " << maxcnt << endl;
+		cerr << "MaxIdx: " << maxidx << endl;
+#endif
+
+		rhsv.at<Vec3b>(0,0) = maxidx;
+
+	} else {
+		// return black
+		rhsv.at<Vec3b>(0,0) = Vec3b(0, 0, 0);
+	}
 }
 
 
@@ -176,10 +196,11 @@ int main(int argc, char **argv)
 	int sbins    = DEF_SBINS;
 	int hrange0  = DEF_HRANGE0;
 	int hrange1  = DEF_HRANGE1;
-	int slevel0  = DEF_SLEVEL0;
+	int slevel1  = DEF_SLEVEL1;
 	int do_normal= DEF_NORMALIZE_KERNELSIZE;
 	int do_reduce= DEF_BITREDUCE_POSTERIZE;
 	float ratioclip = DEF_CLIPRATIO;
+	float whiting= DEF_WHITING_RATIO;
 
 
 	Mat             image;
@@ -189,7 +210,7 @@ int main(int argc, char **argv)
 
 
 	int arg;
-	while( ( arg = getopt(argc, argv, "hpdxvn:b:s:a:z:c:l:")) != -1 )
+	while( ( arg = getopt(argc, argv, "hpdxvn:b:s:a:z:c:l:w:")) != -1 )
 	{
 		switch(arg){
 			default:
@@ -235,7 +256,7 @@ int main(int argc, char **argv)
 
 			case 'a':
 				hrange0 = (int)atoi(optarg);
-				if ( hrange0 < 0 || hrange0 > 180 ){
+				if ( hrange0 < -179 || hrange0 > 180 ){
 					cerr << "Param -a error" << endl;
 					return -1;
 				}
@@ -243,15 +264,15 @@ int main(int argc, char **argv)
 
 			case 'z':
 				hrange1 = (int)atoi(optarg);
-				if ( hrange1 < 0 || hrange1 > 180 ){
+				if ( hrange1 < -179 || hrange1 > 180 ){
 					cerr << "Param -z error" << endl;
 					return -1;
 				}
 				break;
 
 			case 'c':
-				slevel0 = (int)atoi(optarg);
-				if ( slevel0 < 0 || slevel0 > 255 ){
+				slevel1 = (int)atoi(optarg);
+				if ( slevel1 < 0 || slevel1 > 255 ){
 					cerr << "Param -c error" << endl;
 					return -1;
 				}
@@ -265,6 +286,14 @@ int main(int argc, char **argv)
 				}
 				break;
 
+			case 'w':
+				whiting = (float)atof(optarg);
+				if ( whiting < 0 || whiting > 2.0 ){
+					cerr << "Param -w error" << endl;
+					return -1;
+				}
+				break;
+
 			case 'n':	// Execute normarization with medianBlur
 				do_normal = (int)atoi(optarg);
 				if ( do_normal < 1 || do_normal > 9 || (do_normal%2 == 0) ){
@@ -272,15 +301,11 @@ int main(int argc, char **argv)
 					return -1;
 				}
 				break;
-
-			case 'r':
-				do_reduce = (int)atoi(optarg);
-				if ( do_reduce < 0 || do_reduce > 6 ){
-					cerr << "Param -r error" << endl;
-					return -1;
-				}
-				break;
 		}
+	}
+
+	if ( hrange0 > hrange1 ){
+		swap(hrange0, hrange1);
 	}
 
 #if !USE_STDIN
@@ -367,29 +392,45 @@ int main(int argc, char **argv)
 #endif
 
 	// ----- Histgram Calculation -----
-	Mat ret  = Mat(1,1,CV_8UC3);
 	Mat rhsv = Mat(1,1,CV_8UC3);
+	Mat rgb = Mat(1,1,CV_8UC3);
 	int hranges[] = { hrange0, hrange1 };
-	int sranges[] = { slevel0, 255 };
-	execAnalyse( image, ret, rhsv, hbins, sbins, hranges, sranges, peakonly );
+	int sranges[] = { 0, slevel1 };
+	getPriColorHSV( image, rhsv, hbins, sbins, hranges, sranges, peakonly );
+
 #if DEBUG
-	cerr << "Returned RGB: " << ret <<endl;
+	cerr << "Returned HSV: " << rhsv <<endl;
+#endif
+
+	if ( whiting > 0.0 ){
+		Vec3b hsv = rhsv.at<Vec3b>(0,0);
+		int bns = hsv[2];
+		bns = (bns*whiting)>255? 255: (bns*whiting);
+		rhsv.at<Vec3b>(0,0) = Vec3b( hsv[0], hsv[1], bns );
+#if DEBUG
+		cerr << "Whited HSV: " << rhsv <<endl;
+#endif
+	}
+
+	cvtColor( rhsv, rgb, CV_HSV2RGB );
+#if DEBUG
+		cerr << "RGB to get: " << rgb <<endl;
 #endif
 
 	if ( out_hev ){
 		Vec3b hsv = rhsv.at<Vec3b>(0,0);
 		printf("%d %d%% %d%%", hsv[0]*360/180, hsv[1]*100/256, hsv[2]*100/256);	// H S V
 	} else {
-		Vec3b rgb = ret.at<Vec3b>(0,0);
+		Vec3b ret = rgb.at<Vec3b>(0,0);
 
 		if ( out_css ){
 			// CSS format
-			printf("#%02x%02x%02x", rgb[0], rgb[1], rgb[2]);	// #a1b2c3
+			printf("#%02x%02x%02x", ret[0], ret[1], ret[2]);	// #a1b2c3
 		} else {
 			if ( out_dec ){
-				printf("%d %d %d", rgb[0], rgb[1], rgb[2]);
+				printf("%d %d %d", ret[0], ret[1], ret[2]);
 			} else {
-				printf("%02x%02x%02x", rgb[0], rgb[1], rgb[2]);	// #aabbcc
+				printf("%02x%02x%02x", ret[0], ret[1], ret[2]);	// #aabbcc
 			}
 		}
 	}
@@ -404,16 +445,19 @@ static void help(char *path)
 		"\t-v          ... HSV output\n"
 		"\t-d          ... Output with decimals\n"
 		"\t-x          ... Output with stylesheet format\n"
-		"\t-b SIZE     ... 0~5. Bit shift amount of Hue. (Default 2)\n"
-		"\t-s SIZE     ... 0~7. Bit shift amount of Saturation. (Default 4)\n"
-		"\t-a DEGREE   ... 0~180. Start degree of hue\n"
-		"\t-z DEGREE   ... 0~180. End degree of hue\n"
-		"\t-c LEVEL    ... 0~255. Bottom level of chrome\n"
-		"\t-l CLIP     ... 0~90(%). Ratio of cliping\n"
-		"\t-n:         ... 1,3,5,7 or 9. Normalization level. Omiting is non\n"
-		"\t-r:         ... 0~6. Bits to reduce. default is 2\n"
+		"\t-b SIZE     ... 0~5. Bit shift amount of Hue (Default %d)\n"
+		"\t-s SIZE     ... 0~7. Bit shift amount of Saturation (Default %d)\n"
+
+		"\t-a DEGREE   ... -179~180. Start degree of exception lange of hue (Default %d)\n"
+		"\t-z DEGREE   ... -179~180. End digree of exception lange of hue  (Default %d)\n"
+		"\t-c LEVEL    ... 0~255. upper level of chrome to ignore (Default %d)\n"
+
+		"\t-l CLIP     ... 0~0.9. Ratio of cliping (Default %.1f)\n"
+		"\t-n:         ... 1,3,5,7 or 9. Normalization level. Omiting or 0 ignores. (Default %d)\n"
+		"\t-w:         ... 0.0~2.0. Multipul number to white. (Default %.1f)\n"
 		"\tIMAGEFILE   ... Image file. Omitting means from STDIN\n"
-		,path
+		,path, DEF_HBINS, DEF_SBINS, DEF_HRANGE0, DEF_HRANGE1,DEF_SLEVEL1,
+		DEF_CLIPRATIO, DEF_NORMALIZE_KERNELSIZE,DEF_WHITING_RATIO
 	);
 }
 
