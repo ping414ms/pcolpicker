@@ -43,6 +43,7 @@
 
 
 #define DEBUG	0
+#define VERSION "2.0.0"
 
 // STDIN uging without filename
 #define USE_STDIN 1
@@ -75,7 +76,8 @@ using namespace cv;
 
 void getPriColorHSV(Mat &, Mat &, Mat &, int, int, int *, int *, int);
 long get_filesize(const char *);
-static void help(char *);
+static void show_help(char *);
+static void show_version(char *);
 
 
 /**
@@ -193,7 +195,7 @@ int main(int argc, char **argv)
 	int peakonly = 0;
 	int out_dec  = 0;
 	int out_css  = 0;
-	int out_hev  = 0;
+	int out_hsv  = 0;
 	int hbins    = DEF_HBINS;
 	int sbins    = DEF_SBINS;
 	int hrange0  = DEF_HRANGE0;
@@ -212,17 +214,24 @@ int main(int argc, char **argv)
 
 
 	int arg;
-	while( ( arg = getopt(argc, argv, "hpdxvn:b:s:a:z:c:l:w:")) != -1 )
+	while( ( arg = getopt(argc, argv, "hvpdxmn:b:s:a:z:c:l:w:")) != -1 )
 	{
 		switch(arg){
 			default:
 			case 'h':
-				help(argv[0]);
-				return 255;
+				show_help(argv[0]);
+				return 0;
+				break;
+
+			case 'v':
+				show_version(argv[0]);
+				return 0;
+				break;
 
 			case '?':
 				cerr << "Unknown option." << endl;
 				return -1;
+				break;
 
 			case 'p':
 				peakonly = 1;
@@ -236,8 +245,8 @@ int main(int argc, char **argv)
 				out_css = 1;
 				break;
 
-			case 'v':	// hsv out
-				out_hev = 1;
+			case 'm':	// hsv out
+				out_hsv = 1;
 				break;
 
 			case 'b':
@@ -313,7 +322,7 @@ int main(int argc, char **argv)
 #if !USE_STDIN
 	if ( !(argc-1 == optind) ){
 		cerr << "No image file was specified.\n" << endl;
-		help(argv[0]);
+		show_help(argv[0]);
 		return -1;
 	}
 	imagefile = argv[optind];
@@ -346,7 +355,6 @@ int main(int argc, char **argv)
 	} else {
 
 		// from strage
-		image = imread( imagefile, CV_LOAD_IMAGE_COLOR );
 		fsize = get_filesize( imagefile );
 		if ( fsize == -1 ){
 			cerr << "File Error" << endl;
@@ -356,6 +364,7 @@ int main(int argc, char **argv)
 			cerr << "File size(" << fsize << ") over (MAX: " << MAX_FILESIZE << " byte)" << endl;
 			return -1;
 		}
+		image = imread( imagefile, CV_LOAD_IMAGE_COLOR );
 	}
 
 	if ( image.empty() ){
@@ -418,7 +427,7 @@ int main(int argc, char **argv)
 		cerr << "RGB to get: " << rgb <<endl;
 #endif
 
-	if ( out_hev ){
+	if ( out_hsv ){
 		Vec3b hsv = rhsv.at<Vec3b>(0,0);
 		printf("%d %d%% %d%%", hsv[0]*360/180, hsv[1]*100/256, hsv[2]*100/256);	// H S V
 	} else {
@@ -438,12 +447,12 @@ int main(int argc, char **argv)
 }
 
 
-static void help(char *path)
+static void show_help(char *path)
 {
 	printf("USAGE:\n"
 		"   %s [-p] [-d|-x] [-b SIZE] [-c SIZE] [-a DEGREE] [-z DEGREE] [-c LEVEL] [IMAGEFILE]\n"
 		"\t-p          ... Most used color output picking without range limits\n"
-		"\t-v          ... HSV output\n"
+		"\t-m          ... HSV output\n"
 		"\t-d          ... Output with decimals\n"
 		"\t-x          ... Output with stylesheet format\n"
 		"\t-b SIZE     ... 0~5. Bit shift amount of Hue (Default %d)\n"
@@ -457,9 +466,14 @@ static void help(char *path)
 		"\t-n:         ... 1,3,5,7 or 9. Normalization level. Omiting or 0 ignores. (Default %d)\n"
 		"\t-w:         ... 0.0~2.0. Multipul number to white. (Default %.1f)\n"
 		"\tIMAGEFILE   ... Image file. Omitting means from STDIN\n"
+		"\t-v          ... Print version\n"
 		,path, DEF_HBINS, DEF_SBINS, DEF_HRANGE0, DEF_HRANGE1,DEF_SLEVEL1,
 		DEF_CLIPRATIO, DEF_NORMALIZE_KERNELSIZE,DEF_WHITING_RATIO
 	);
 }
 
+static void show_version(char *path)
+{
+	printf("PriColor Picker - version %s\n", VERSION);
+}
 
