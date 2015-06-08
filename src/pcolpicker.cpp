@@ -42,7 +42,7 @@
 #include <opencv2/gpu/gpu.hpp>
 
 
-#define DEBUG	1
+#define DEBUG	0
 
 // STDIN uging without filename
 #define USE_STDIN 1
@@ -57,12 +57,14 @@
 #define DEF_HRANGE1  24		// 48'/360'	Covering pR,R,yR of PCCS
 #define DEF_SLEVEL1  200	// 78%/100%
 #define DEF_CLIPRATIO  0.1
+#define DEF_IGNORE_MONO_LEVEL 40 // about 15% of chromatic
 
 #define DEF_RESIZE_WIDTH  200
 #define DEF_RESIZE_HEIGHT 200
 
 #define DEF_NORMALIZE_KERNELSIZE 0
 #define DEF_BITREDUCE_POSTERIZE  2
+
 
 #define DEF_WHITING_RATIO 0.0	// output color with bit whiting
 
@@ -106,7 +108,7 @@ void getPriColorHSV(Mat& image, Mat& rhsv, int hbins, int sbins, int* hranges, i
 			int val = vec[2];
 
 			if ( !peakonly ){
-				if ( sat == 0 ) continue;     // ignore black
+				if ( sat < DEF_IGNORE_MONO_LEVEL ) continue;     // ignore monotone
 				// skip when color is out of range
 				if ( srange0 <= sat && sat <= srange1 ){
 					if ( hrange0 < 0 ){
@@ -404,9 +406,8 @@ int main(int argc, char **argv)
 
 	if ( whiting > 0.0 ){
 		Vec3b hsv = rhsv.at<Vec3b>(0,0);
-		int bns = hsv[2];
-		bns = (bns*whiting)>255? 255: (bns*whiting);
-		rhsv.at<Vec3b>(0,0) = Vec3b( hsv[0], hsv[1], bns );
+		int sat = hsv[1];
+		rhsv.at<Vec3b>(0,0) = Vec3b( hsv[0], sat/2, 255 );
 #if DEBUG
 		cerr << "Whited HSV: " << rhsv <<endl;
 #endif
