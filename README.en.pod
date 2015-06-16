@@ -5,7 +5,7 @@
 # Developed by:
 # 	T.Onodera <onodera.takahiro@adways.net>
 # Version:
-# 	1.0.0
+# 	2.0.0
 # Cf.:
 # 	http://aidiary.hatenablog.com/entry/20091003/1254574041
 # 
@@ -22,26 +22,45 @@
 
 =head1 SYNOPSIS
 
-    ./pcolpicker [-p] [-x|-s] [-c F_CHROMA] [-n S_CHROMA] IMAGEFILE
-        -p          ... Simply, most used color picking
-        -s          ... Output CSS format
-        -x          ... Output with hexadecimals
-        -c F_CHROMA ... 0<n<1.0. First pickup threshold(Def 0.5)
-        -n S_CHROMA ... 0<n<1.0. Second pickup threshold(Def 0.2)
-        IMAGEFILE   ... Image file
+
+    USAGE:
+    ./pcolpicker [-p] [-d|-x] [-b SIZE] [-c SIZE] [-a DEGREE] [-z DEGREE] [-c LEVEL] [IMAGEFILE]
+        -p          ... Most used color output picking without range limits
+        -m          ... HSV output
+        -d          ... Output with decimals
+        -x          ... Output with stylesheet format
+        -b SIZE     ... 0~5. Bit shift amount of Hue (Default 2)
+        -s SIZE     ... 0~7. Bit shift amount of Saturation (Default 4)
+        -a DEGREE   ... -179~180. Start degree of exception lange of hue (Default -3)
+        -z DEGREE   ... -179~180. End digree of exception lange of hue  (Default 24)
+        -c LEVEL    ... 0~255. upper level of chrome to ignore (Default 200)
+        -l CLIP     ... 0~0.9. Ratio of cliping (Default 0.1)
+        -n:         ... 1,3,5,7 or 9. Normalization level. Omiting or 0 ignores. (Default 0)
+        -w:         ... 0.0~2.0. Multipul number to white. (Default 0.0)
+        -v          ... Print version
+        IMAGEFILE   ... Image file. Omitting means from STDIN
 
 =head1 DESCRIPTION
 
-This program picks up primary color of image file.
-In this program, primary color is defined as a chromatich color
-in image.
+This program picks up primary color of image file, particularly 
+for nailart color on photo of fingers and nails.
 
 The pcolpicker will proceed with several steps.
-First, PricolorPicker will try to find a most used color that
-chromatic value is more than 0.5 (can change by option, C<-c>).
-If it can't find it, then, program will try to find one more
-than 0.2.(also can change by option, C<-n>).
-If it can't still, program will output a value of most used color.
+First, this will clop edges of memoried image data for the aim of
+focusing to nails more (almostly nails are centered in picutres)
+and redice data to calculate.
+
+And then, the program convert image data from RGB set to HSV one
+with reducing color depth.
+
+And calculating and counting high chromatic colors pixcels with
+excepting skin color.
+(Skin color, about -5~15 degree of hue round and middle-to-low
+chromatic will be excepted)
+
+This program will output 6-digits hex number in default.
+You can change this to decimal RGB numbers or stylesheet format
+like C<#aabbcc> format with options. And also can get HSV data.
 
 =head1 INSTALL
 
@@ -61,7 +80,7 @@ The way to config system ones is to make a file which was written
 '/usr/local/lib' under the directory, </etc/ld.so.conf.d/>, and execute
 C<ldconfig>.
 Personal one, set C<LD_LIBRARY_PATH> environment variable before 
-executing program.
+executing program. Or, with linux, make ld.so.conf file into C</etc/ld.so.conf.d/>.
 
 =head2 How to make
 
@@ -73,75 +92,12 @@ Change program directory which has sorce, and execute C<make>.
 Executable program, C<pcolpicker>, will be made and copy or move it to
 your favorite place.
 
-=head1 COLOR OPTIMIZATION
+=head2 Sample
 
-For easy analization, this program reduces colors of image to 4096
-palletes first.
+See sample with this page in internal server of Adways.
 
-=head1 OUTPUT
+    http://10.255.32.47/pricol/
 
-Default, this shows RGB values with white space separating like;
-
-    0 8 4
-
-C<-x> option changes these decimal to hexdecimal.
-
-    a d 5
-
-And more, C<-s> option changes these to CSS style hex value.
-
-    #893
-
-=head1 OpenCV
-
-This program uses OpenCV 2, so you neet to install it.
-(Prefix should be /usr/local)
-
-If you use CentOS as your host, an web page below will helps well.
-(Do not use OpenCV which is installed by C<yum> command.)
-
-L<http://superuser.com/questions/678568/install-opencv-in-centos/725799#725799>
-
-There is snipet of installing from that page.
-
-=over
-
-=item 1. install all the required packages using yum
-
-    yum groupinstall "Development Tools" 
-    yum install gcc 
-    yum install cmake 
-    yum install git
-    yum install gtk2-devel
-    yum install pkgconfig 
-    yum install numpy 
-    yum install ffmpeg
-
-=item 2. Create working directory and check out the source code
-
-    mkdir /opt/working
-    cd /opt/working
-    git clone https://github.com/Itseez/opencv.git
-    cd opencv
-    git checkout tags/2.4.8.2
-
-=item 3. Create the Makefile
-
-    mkdir release
-    cd release
-    cmake -D CMAKE_BUILD_TYPE=RELEASE -D CMAKE_INSTALL_PREFIX=/usr/local ..
-
-=item 4. (note)
-
-If using cmake version 2.6-patch 4 (check with cmake --version), then you'll need to comment out a line in the build. Comment out string(MD5 hash "${lines}") on line 50 in /opt/working/opencv/cmake/cl2cpp.cmake. Other options (including updating cmake) can be found at here.
-
-=item 5. Build and install
-
-    cd /opt/working/opencv/release
-    make
-    make install
-
-=back
 
 =head1 BUG and REQUEST, etc.
 
@@ -152,6 +108,7 @@ It will be pleasure for me that you will improve, correct bug and custormize thi
 =head1 VERSION and HISTORY
 
 Ver. 1.0.0 2014/12/11 First Release
+Ver. 2.0.0 2015/06/16 Modified program for using Mat format of OpenCV.
 
 =head1 AUTHOR
 
