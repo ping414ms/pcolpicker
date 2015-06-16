@@ -76,9 +76,11 @@ to install cmake)
 Program requires a library search path, C</usr/local/lib>.
 So you should configure system environment or your current one for this
 to find it.
+
 The way to config system ones is to make a file which was written
 '/usr/local/lib' under the directory, </etc/ld.so.conf.d/>, and execute
 C<ldconfig>.
+
 Personal one, set C<LD_LIBRARY_PATH> environment variable before 
 executing program. Or, with linux, make ld.so.conf file into C</etc/ld.so.conf.d/>.
 
@@ -102,12 +104,14 @@ See sample with this page in internal server of Adways.
 =head1 BUG and REQUEST, etc.
 
 Tell or ask me, Onodera. 
+
 Program is written by c++, but almost part is C style coding...
 It will be pleasure for me that you will improve, correct bug and custormize this!
 
 =head1 VERSION and HISTORY
 
 Ver. 1.0.0 2014/12/11 First Release
+
 Ver. 2.0.0 2015/06/16 Modified program for using Mat format of OpenCV.
 
 =head1 AUTHOR
