@@ -43,7 +43,7 @@
 
 
 #define DEBUG	0
-#define VERSION "2.0.0"
+#define VERSION "2.0.1"
 
 // STDIN uging without filename
 #define USE_STDIN 1
@@ -415,8 +415,8 @@ int main(int argc, char **argv)
 
 	if ( whiting > 0.0 ){
 		Vec3b hsv = rhsv.at<Vec3b>(0,0);
-		int sat = hsv[1];
-		rhsv.at<Vec3b>(0,0) = Vec3b( hsv[0], sat/2, 255 );
+		int sat = (float)hsv[2] / whiting;
+		rhsv.at<Vec3b>(0,0) = Vec3b( hsv[0], sat, hsv[2] );
 #if DEBUG
 		cerr << "Whited HSV: " << rhsv <<endl;
 #endif
