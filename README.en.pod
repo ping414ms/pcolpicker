@@ -3,13 +3,11 @@
 # 
 # ---
 # Developed by:
-# 	T.Onodera <onodera.takahiro@adways.net>
+# 	T.Onodera 
 # Version:
 # 	2.0.0
 # Cf.:
 # 	http://aidiary.hatenablog.com/entry/20091003/1254574041
-# 
-# 	(C)ADWAYS Inc. all rights reserved.
 # 
 # =====================================================================
 
@@ -62,65 +60,8 @@ This program will output 6-digits hex number in default.
 You can change this to decimal RGB numbers or stylesheet format
 like C<#aabbcc> format with options. And also can get HSV data.
 
-=head1 INSTALL
-
-=head2 Requirement
-
-Linux and C<gcc> are needed.
-And it need OpenCV2. If you use CentOS, see OpenCV section below for
-installing. (Note that to install OpenCV, it is maybe also necessary
-to install cmake)
-
-=head2 System Environment
-
-Program requires a library search path, C</usr/local/lib>.
-So you should configure system environment or your current one for this
-to find it.
-
-The way to config system ones is to make a file which was written
-'/usr/local/lib' under the directory, </etc/ld.so.conf.d/>, and execute
-C<ldconfig>.
-
-Personal one, set C<LD_LIBRARY_PATH> environment variable before 
-executing program. Or, with linux, make ld.so.conf file into C</etc/ld.so.conf.d/>.
-
-=head2 How to make
-
-Change program directory which has sorce, and execute C<make>.
-
-    cd pcolpicker
-    make
-
-Executable program, C<pcolpicker>, will be made and copy or move it to
-your favorite place.
-
-=head2 Sample
-
-See sample with this page in internal server of Adways.
-
-    http://10.255.32.47/pricol/
-
-
-=head1 BUG and REQUEST, etc.
-
-Tell or ask me, Onodera. 
-
-Program is written by c++, but almost part is C style coding...
-It will be pleasure for me that you will improve, correct bug and custormize this!
-
-=head1 VERSION and HISTORY
-
-Ver. 1.0.0 2014/12/11 First Release
-
-Ver. 2.0.0 2015/06/16 Modified program for using Mat format of OpenCV.
-
 =head1 AUTHOR
 
-T.Onodera, C<< <onodera.takahiro at adways.net> >>
-
-=head1 LICENSE AND COPYRIGHT
-
-(C)ADWAYS Inc. All Rights Reserved.
-
+T.Onodera
 
 =cut

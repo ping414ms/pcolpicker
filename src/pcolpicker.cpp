@@ -17,13 +17,12 @@
 //
 //    ---
 //    Developed by:
-//        T.Onodera <onodera.takahiro@adways.net>
+//        T.Onodera 
 //    Version:
 //        2.0.0
 //    Cf.:
 //        http://aidiary.hatenablog.com/entry/20091003/1254574041
 //
-//    (C)ADWAYS Inc. all rights reserved.
 // =====================================================================
 
 #include <cstdio>
